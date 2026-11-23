@@ -341,3 +341,15 @@ func TestLoad_RejectsCorruptHistory(t *testing.T) {
 		})
 	}
 }
+
+func TestResultVersion_ReturnsVersionOfTheOriginalEvent(t *testing.T) {
+	a := given(t, atStage(application.Offer)...) // k-move-SCREENING was version 2
+
+	v, ok := a.ResultVersion("k-move-SCREENING")
+	if !ok || v != 2 {
+		t.Fatalf("ResultVersion = (%d, %v), want (2, true)", v, ok)
+	}
+	if _, ok := a.ResultVersion("never-used"); ok {
+		t.Fatal("ResultVersion reported an unknown key as processed")
+	}
+}

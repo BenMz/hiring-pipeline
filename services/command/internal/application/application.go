@@ -21,14 +21,19 @@ type Application struct {
 	candidateEmail string
 	stage          Stage
 	version        int64
-	// processed maps each idempotency key seen in the stream to the
-	// fingerprint of the command it was used for.
-	processed map[string]string
+	// processed maps each idempotency key seen in the stream to the command
+	// it was used for, so retries are recognised even after a restart.
+	processed map[string]processedCommand
+}
+
+type processedCommand struct {
+	fingerprint string
+	version     int64
 }
 
 // New returns an application that has not been submitted yet.
 func New(id string) *Application {
-	return &Application{id: id, processed: map[string]string{}}
+	return &Application{id: id, processed: map[string]processedCommand{}}
 }
 
 // Load rebuilds an application by replaying its events in order.
@@ -58,6 +63,13 @@ func (a *Application) Stage() Stage { return a.stage }
 
 // Version returns the version of the last applied event; 0 for a new stream.
 func (a *Application) Version() int64 { return a.version }
+
+// ResultVersion returns the version of the event written by the command with
+// the given idempotency key, so a retry can return the original response.
+func (a *Application) ResultVersion(key string) (int64, bool) {
+	p, ok := a.processed[key]
+	return p.version, ok
+}
 
 // Submit records a new application at the APPLIED stage.
 func (a *Application) Submit(cmd SubmitApplication, now time.Time) ([]Event, error) {
@@ -140,7 +152,7 @@ func (a *Application) alreadyProcessed(key, fingerprint string) (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	if seen != fingerprint {
+	if seen.fingerprint != fingerprint {
 		return false, fmt.Errorf("%w: %q", ErrIdempotencyKeyReused, key)
 	}
 	return true, nil
@@ -167,5 +179,5 @@ func (a *Application) apply(e Event) {
 	}
 	m := e.Metadata()
 	a.version = m.Version
-	a.processed[m.IdempotencyKey] = e.fingerprint()
+	a.processed[m.IdempotencyKey] = processedCommand{fingerprint: e.fingerprint(), version: m.Version}
 }

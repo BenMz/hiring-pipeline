@@ -55,6 +55,21 @@ services:
       timeout: 5s
       retries: 20
 
+  pipeline-command:
+    build:
+      context: .
+      dockerfile: services/command/Dockerfile
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      EVENTS_TOPIC: applications.events
+      GRPC_ADDR: ":50051"
+    ports:
+      - "50051:50051"
+    depends_on:
+      create-topics:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   postgres-data:
