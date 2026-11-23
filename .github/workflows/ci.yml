@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  proto:
+    name: Protobuf (lint, format, codegen up to date)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bufbuild/buf-action@v1
+        with:
+          lint: true
+          format: true
+          # Enabled in part 3, once there is a main branch to compare against.
+          breaking: false
+          push: false
+      - name: Generated code matches the protos
+        run: |
+          buf generate
+          git diff --exit-code -- gen/ services/notifier/src/gen/ || {
+            echo "::error::Generated code is stale. Run 'make generate' and commit the result."
+            exit 1
+          }
+
+  go:
+    name: Go (lint, unit tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+      - name: Unit tests
+        run: go test -race -count=1 ./...

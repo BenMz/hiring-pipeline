@@ -1,0 +1,17 @@
+# Go
+/bin/
+*.test
+*.out
+coverage.*
+
+# Node
+node_modules/
+dist/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Local env
+.env

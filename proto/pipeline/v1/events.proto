@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package pipeline.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Stage is the position of an application in the hiring funnel.
+// HIRED and REJECTED are terminal.
+enum Stage {
+  STAGE_UNSPECIFIED = 0;
+  STAGE_APPLIED = 1;
+  STAGE_SCREENING = 2;
+  STAGE_INTERVIEW = 3;
+  STAGE_OFFER = 4;
+  STAGE_HIRED = 5;
+  STAGE_REJECTED = 6;
+}
+
+// EventMetadata is carried by every event in the store.
+message EventMetadata {
+  // Unique ID of this event.
+  string event_id = 1;
+  // ID of the aggregate (job or application) the event belongs to.
+  // Also used as the Kafka record key, so all events of one aggregate
+  // land on the same partition in order.
+  string aggregate_id = 2;
+  // Position of the event in the aggregate's stream, starting at 1.
+  int64 version = 3;
+  // Idempotency key of the command that produced the event.
+  string idempotency_key = 4;
+  google.protobuf.Timestamp occurred_at = 5;
+}
+
+message JobOpened {
+  string job_id = 1;
+  string company_id = 2;
+  string title = 3;
+}
+
+message ApplicationSubmitted {
+  string application_id = 1;
+  string job_id = 2;
+  string candidate_name = 3;
+  string candidate_email = 4;
+}
+
+message StageChanged {
+  string application_id = 1;
+  Stage from_stage = 2;
+  Stage to_stage = 3;
+}
+
+message CandidateRejected {
+  string application_id = 1;
+  Stage from_stage = 2;
+  string reason = 3;
+}
+
+// Event is the envelope written to the applications.events topic.
+message Event {
+  EventMetadata metadata = 1;
+  oneof payload {
+    JobOpened job_opened = 10;
+    ApplicationSubmitted application_submitted = 11;
+    StageChanged stage_changed = 12;
+    CandidateRejected candidate_rejected = 13;
+  }
+}

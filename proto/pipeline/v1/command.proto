@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package pipeline.v1;
+
+import "pipeline/v1/events.proto";
+
+// PipelineCommandService is the write side. Every request carries an
+// idempotency_key: retrying a request with the same key returns the original
+// result and appends no new events. Reusing a key for a different request
+// fails with ALREADY_EXISTS.
+service PipelineCommandService {
+  rpc OpenJob(OpenJobRequest) returns (OpenJobResponse);
+  rpc SubmitApplication(SubmitApplicationRequest) returns (SubmitApplicationResponse);
+  rpc MoveStage(MoveStageRequest) returns (MoveStageResponse);
+  rpc RejectCandidate(RejectCandidateRequest) returns (RejectCandidateResponse);
+}
+
+message OpenJobRequest {
+  string idempotency_key = 1;
+  string company_id = 2;
+  string title = 3;
+}
+
+message OpenJobResponse {
+  string job_id = 1;
+  int64 version = 2;
+}
+
+message SubmitApplicationRequest {
+  string idempotency_key = 1;
+  string job_id = 2;
+  string candidate_name = 3;
+  string candidate_email = 4;
+}
+
+message SubmitApplicationResponse {
+  string application_id = 1;
+  int64 version = 2;
+}
+
+message MoveStageRequest {
+  string idempotency_key = 1;
+  string application_id = 2;
+  Stage to_stage = 3;
+}
+
+message MoveStageResponse {
+  int64 version = 1;
+}
+
+message RejectCandidateRequest {
+  string idempotency_key = 1;
+  string application_id = 2;
+  string reason = 3;
+}
+
+message RejectCandidateResponse {
+  int64 version = 1;
+}

@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package pipeline.v1;
+
+import "google/protobuf/timestamp.proto";
+import "pipeline/v1/events.proto";
+
+// PipelineQueryService is the read side, served from PostgreSQL read models
+// that the projector builds from the event stream.
+service PipelineQueryService {
+  rpc ListApplications(ListApplicationsRequest) returns (ListApplicationsResponse);
+  rpc GetFunnel(GetFunnelRequest) returns (GetFunnelResponse);
+}
+
+message ListApplicationsRequest {
+  string job_id = 1;
+  // Optional filter; STAGE_UNSPECIFIED returns all stages.
+  Stage stage = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListApplicationsResponse {
+  repeated ApplicationSummary applications = 1;
+  string next_page_token = 2;
+}
+
+message ApplicationSummary {
+  string application_id = 1;
+  string job_id = 2;
+  string candidate_name = 3;
+  string candidate_email = 4;
+  Stage stage = 5;
+  google.protobuf.Timestamp submitted_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message GetFunnelRequest {
+  string job_id = 1;
+}
+
+message GetFunnelResponse {
+  string job_id = 1;
+  repeated StageCount stages = 2;
+}
+
+message StageCount {
+  Stage stage = 1;
+  int64 count = 2;
+}
