@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	pipelinev1 "github.com/BenMz/hiring-pipeline/gen/go/pipeline/v1"
+	"github.com/BenMz/hiring-pipeline/internal/grpcx"
 	"github.com/BenMz/hiring-pipeline/services/command/internal/eventstore"
 	"github.com/BenMz/hiring-pipeline/services/command/internal/server"
 )
@@ -61,8 +62,8 @@ func Run(ctx context.Context, cfg Config, lis net.Listener, log *slog.Logger) er
 	log.Info("event store ready", "topic", cfg.Topic, "replay", time.Since(start).String())
 
 	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(
-		server.Logging(log),
-		server.Deadline(cfg.RequestTimeout),
+		grpcx.Logging(log),
+		grpcx.Deadline(cfg.RequestTimeout),
 	))
 	pipelinev1.RegisterPipelineCommandServiceServer(srv, server.New(store, time.Now, log))
 	healthSrv := health.NewServer()

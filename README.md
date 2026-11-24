@@ -7,8 +7,19 @@ A company opens a job, candidates apply, and recruiters move each application th
 Every change is an event in the Kafka topic `applications.events`. Those events are the
 source of truth. PostgreSQL holds read models only, and they can be rebuilt by replaying the topic.
 
-> Status: **part 2 of 4**. The command service is done: gRPC API, Kafka event store,
-> idempotent commands, and integration tests. The projector, query API and notifier come next.
+> Status: **part 3 of 4**. Commands, event store, projector with replay, and the query API
+> are done. The TypeScript notifier comes next.
+
+```
+                    ┌──────────────────┐   append (keyed by ID)  ┌──────────────────────┐
+  gRPC commands ──▶ │ pipeline-command │ ──────────────────────▶ │ Kafka                │
+                    └──────────────────┘ ◀── replay aggregates ─ │ applications.events  │
+                                                                 └──────────┬───────────┘
+                                                                            │ consume
+                    ┌──────────────────┐   read                  ┌──────────▼───────────┐
+  gRPC queries  ──▶ │ pipeline-query   │ ──────────────────────▶ │ pipeline-projector   │
+                    └──────────────────┘   PostgreSQL read models └──────────────────────┘
+```
 
 ## Layout
 
@@ -22,7 +33,13 @@ services/command/
   internal/codec/               domain events <-> protobuf envelopes
   internal/eventstore/          Store interface; Kafka and in-memory implementations
   internal/server/              gRPC handlers, status-code mapping, deadline interceptor
-test/integration/               Testcontainers: real service + real Redpanda
+services/projector/
+  internal/projection/          idempotent SQL per event, offsets, reset
+  internal/runner/              Kafka consumer; batch + offsets in one transaction
+services/query/                 ListApplications, GetFunnel over PostgreSQL
+migrations/                     read-model schema (embedded; applied by the projector)
+internal/                       shared gRPC middleware and test helpers
+test/integration/               Testcontainers: all services + real Redpanda + PostgreSQL
 docs/adr/                       decision records
 services/notifier/src/gen/      generated TypeScript code for the notifier
 docker-compose.yml              Redpanda (Kafka API) + PostgreSQL 16
@@ -65,14 +82,33 @@ Why Kafka can serve as the event store, and where that stops working: [ADR 1](do
 Every request gets a deadline of at most `REQUEST_TIMEOUT` (default 5s). A shorter
 client deadline is kept.
 
+## Read models and replay
+
+The projector turns events into three tables: `jobs`, `applications_by_job` and
+`stage_counts`. Its Kafka offsets are stored in PostgreSQL **in the same transaction**
+as the changes they caused, and every statement is idempotent: each row remembers the
+version of the last event applied to it. See [ADR 2](docs/adr/0002-projector-offsets-in-postgres.md).
+
+To rebuild, drop the read models and replay the whole topic from offset 0:
+
+```sh
+make rebuild    # stops the projector, runs `pipeline-projector rebuild`, starts it again
+```
+
+A rebuild refuses to run while a projector is running (PostgreSQL advisory lock). The
+integration test `TestRebuild_ReplayFromZeroProducesIdenticalReadModels` generates a random
+workload with retried commands, snapshots every read-model row, rebuilds, and checks that
+the result is identical row for row and matches the expected funnel.
+
 ## Run it
 
 ```sh
-docker compose up -d --build   # Redpanda :19092, Postgres :5432, pipeline-command :50051
+docker compose up -d --build   # Redpanda :19092, Postgres :5432, command :50051, query :50052
 make test                      # unit tests
 make integration               # integration tests (needs Docker)
-make lint                # buf lint + format check, golangci-lint
-make generate            # regenerate code after editing .proto files (needs buf)
+make lint                      # buf lint + format check, golangci-lint
+make breaking                  # buf breaking against main (also runs in CI)
+make generate                  # regenerate code after editing .proto files (needs buf)
 ```
 
 The topic is created with infinite retention and `cleanup.policy=delete`. It is deliberately
@@ -98,4 +134,9 @@ grpcurl -plaintext -d '{"idempotency_key":"move-1","application_id":"<APP_ID>","
   localhost:50051 $S/MoveStage
 
 docker compose exec redpanda rpk topic consume applications.events -f '%k p%p@%o\n'
+
+# read side (eventually consistent, usually within milliseconds)
+Q=pipeline.v1.PipelineQueryService
+grpcurl -plaintext -d '{"job_id":"<JOB_ID>"}' localhost:50052 $Q/GetFunnel
+grpcurl -plaintext -d '{"job_id":"<JOB_ID>","stage":"STAGE_SCREENING","page_size":20}' localhost:50052 $Q/ListApplications
 ```

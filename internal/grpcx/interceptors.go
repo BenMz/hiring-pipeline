@@ -1,4 +1,5 @@
-package server
+// Package grpcx holds gRPC middleware shared by the Go services.
+package grpcx
 
 import (
 	"context"

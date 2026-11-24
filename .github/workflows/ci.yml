@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   proto:
-    name: Protobuf (lint, format, codegen up to date)
+    name: Protobuf (lint, format, breaking, codegen up to date)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -18,8 +18,9 @@ jobs:
         with:
           lint: true
           format: true
-          # Enabled in part 3, once there is a main branch to compare against.
-          breaking: false
+          # Compares against the PR's base branch, or the previous commit on
+          # a push. Label a PR "buf skip breaking" for an intentional break.
+          breaking: ${{ !contains(github.event.pull_request.labels.*.name, 'buf skip breaking') }}
           push: false
       - name: Generated code matches the protos
         run: |

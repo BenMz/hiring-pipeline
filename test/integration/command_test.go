@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"os"
 	"testing"
 	"time"
 
@@ -23,20 +22,6 @@ import (
 	"github.com/BenMz/hiring-pipeline/internal/testkafka"
 	"github.com/BenMz/hiring-pipeline/services/command/app"
 )
-
-var broker string
-
-func TestMain(m *testing.M) {
-	b, stop, err := testkafka.Start(context.Background())
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	broker = b
-	code := m.Run()
-	stop()
-	os.Exit(code)
-}
 
 // startService runs pipeline-command in-process on a random port and returns
 // a client plus a function that shuts the service down.

@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	pipelinev1 "github.com/BenMz/hiring-pipeline/gen/go/pipeline/v1"
+	"github.com/BenMz/hiring-pipeline/internal/grpcx"
 	"github.com/BenMz/hiring-pipeline/services/command/internal/eventstore"
 	"github.com/BenMz/hiring-pipeline/services/command/internal/server"
 )
@@ -30,7 +31,7 @@ func newHarness(t *testing.T, store eventstore.Store, maxTimeout time.Duration) 
 	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	lis := bufconn.Listen(1 << 20)
-	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(server.Logging(log), server.Deadline(maxTimeout)))
+	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(grpcx.Logging(log), grpcx.Deadline(maxTimeout)))
 	pipelinev1.RegisterPipelineCommandServiceServer(srv, server.New(store, func() time.Time { return now }, log))
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)

@@ -58,7 +58,8 @@ services:
   pipeline-command:
     build:
       context: .
-      dockerfile: services/command/Dockerfile
+      args:
+        SERVICE: command
     environment:
       KAFKA_BROKERS: redpanda:9092
       EVENTS_TOPIC: applications.events
@@ -68,6 +69,37 @@ services:
     depends_on:
       create-topics:
         condition: service_completed_successfully
+    restart: unless-stopped
+
+  pipeline-projector:
+    build:
+      context: .
+      args:
+        SERVICE: projector
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      EVENTS_TOPIC: applications.events
+      DATABASE_URL: postgres://pipeline:pipeline@postgres:5432/pipeline?sslmode=disable
+    depends_on:
+      create-topics:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  pipeline-query:
+    build:
+      context: .
+      args:
+        SERVICE: query
+    environment:
+      DATABASE_URL: postgres://pipeline:pipeline@postgres:5432/pipeline?sslmode=disable
+      GRPC_ADDR: ":50052"
+    ports:
+      - "50052:50052"
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
