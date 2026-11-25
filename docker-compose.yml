@@ -102,6 +102,33 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Local SMTP server with a web inbox at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.34
+    ports:
+      - "8025:8025" # web UI
+    restart: unless-stopped
+
+  pipeline-notifier:
+    build:
+      context: services/notifier
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      EVENTS_TOPIC: applications.events
+      CONSUMER_GROUP: pipeline-notifier
+      DATABASE_URL: postgres://pipeline:pipeline@postgres:5432/pipeline?sslmode=disable
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      NOTIFY_MAX_AGE: 24h
+    depends_on:
+      create-topics:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   redpanda-data:
   postgres-data:
